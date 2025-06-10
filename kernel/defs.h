@@ -7,6 +7,7 @@ struct proc;
 struct spinlock;
 struct sleeplock;
 struct stat;
+struct syscall_stat;
 struct superblock;
 
 // bio.c
@@ -140,6 +141,9 @@ void            argaddr(int, uint64 *);
 int             fetchstr(uint64, char*, int);
 int             fetchaddr(uint64, uint64*);
 void            syscall();
+void syscallinit(void);
+void syscall_record(int,int);
+int fetch_syscall_stat(int, struct syscall_stat*);
 
 // trap.c
 extern uint     ticks;
