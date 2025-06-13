@@ -5,6 +5,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "pstat.h"
 
 uint64
 sys_exit(void)
@@ -90,4 +91,52 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+uint64
+sys_settickets(void)
+{
+  int n;
+  argint(0, &n);
+  if(n < 1)
+    n = DEFAULT_TICKET_COUNT;
+  struct proc *p = myproc();
+  acquire(&p->lock);
+  p->ticket_original = n;
+  p->ticket_current = n;
+  release(&p->lock);
+  return 0;
+}
+
+uint64
+sys_getpinfo(void)
+{
+  uint64 addr;
+  struct pstat st;
+  argaddr(0, &addr);
+  for(int i = 0; i < NPROC; i++){
+    st.pid[i] = 0;
+    st.inuse[i] = 0;
+    st.inQ[i] = 0;
+    st.tickets_original[i] = 0;
+    st.tickets_current[i] = 0;
+    st.time_slices[i] = 0;
+  }
+  struct proc *pp;
+  for(pp = proc; pp < &proc[NPROC]; pp++){
+    acquire(&pp->lock);
+    if(pp->state != UNUSED){
+      int idx = pp - proc;
+      st.pid[idx] = pp->pid;
+      st.inuse[idx] = 1;
+      st.inQ[idx] = pp->queue;
+      st.tickets_original[idx] = pp->ticket_original;
+      st.tickets_current[idx] = pp->ticket_current;
+      st.time_slices[idx] = pp->ticks_total;
+    }
+    release(&pp->lock);
+  }
+  if(copyout(myproc()->pagetable, addr, (char *)&st, sizeof(st)) < 0)
+    return -1;
+  return 0;
 }
