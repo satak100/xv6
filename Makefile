@@ -19,6 +19,7 @@ OBJS = \
   $K/syscall.o \
   $K/sysproc.o \
   $K/history.o \
+  $K/rand.o \
   $K/bio.o \
   $K/fs.o \
   $K/log.o \
@@ -138,9 +139,11 @@ UPROGS=\
 	$U/_stressfs\
 	$U/_usertests\
 	$U/_grind\
-	$U/_wc\
-	$U/_zombie\
+        $U/_wc\
+        $U/_zombie\
         $U/_history\
+        $U/_dummyproc\
+        $U/_testprocinfo\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

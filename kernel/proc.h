@@ -104,4 +104,12 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  // scheduler info
+  int queue;                   // 1 or 2
+  int ticket_original;         // initial tickets
+  int ticket_current;          // remaining tickets in queue1
+  int ticks_total;             // total time slices scheduled
+  int ticks_current;           // time slices in current turn
+  int timeup;                  // set if preempted due to time slice
 };

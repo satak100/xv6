@@ -4,6 +4,7 @@
 #include "riscv.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "rand.h"
 #include "defs.h"
 
 struct cpu cpus[NCPU];
@@ -14,6 +15,8 @@ struct proc *initproc;
 
 int nextpid = 1;
 struct spinlock pid_lock;
+
+static uint boost_ticks = 0;
 
 extern void forkret(void);
 static void freeproc(struct proc *p);
@@ -146,6 +149,13 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  p->queue = 1;
+  p->ticket_original = DEFAULT_TICKET_COUNT;
+  p->ticket_current = DEFAULT_TICKET_COUNT;
+  p->ticks_total = 0;
+  p->ticks_current = 0;
+  p->timeup = 0;
+
   return p;
 }
 
@@ -169,6 +179,12 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  p->queue = 1;
+  p->ticket_original = 0;
+  p->ticket_current = 0;
+  p->ticks_total = 0;
+  p->ticks_current = 0;
+  p->timeup = 0;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -309,6 +325,13 @@ fork(void)
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
+
+  np->queue = 1;
+  np->ticket_original = p->ticket_original;
+  np->ticket_current = p->ticket_original;
+  np->ticks_total = 0;
+  np->ticks_current = 0;
+  np->timeup = 0;
 
   pid = np->pid;
 
@@ -454,26 +477,60 @@ scheduler(void)
     // processes are waiting.
     intr_on();
 
-    int found = 0;
+    struct proc *pick = 0;
+    int totalt = 0;
+
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
-      }
+      if(p->state == RUNNABLE && p->queue == 1)
+        totalt += p->ticket_current;
       release(&p->lock);
     }
-    if(found == 0) {
-      // nothing to run; stop running on this core until an interrupt.
+
+    if(totalt > 0){
+      int win = rand_range(totalt - 1);
+      int sofar = 0;
+      for(p = proc; p < &proc[NPROC]; p++){
+        acquire(&p->lock);
+        if(p->state == RUNNABLE && p->queue == 1){
+          sofar += p->ticket_current;
+          if(sofar > win){
+            pick = p;
+            break;
+          }
+        }
+        release(&p->lock);
+      }
+    } else {
+      for(p = proc; p < &proc[NPROC]; p++){
+        acquire(&p->lock);
+        if(p->state == RUNNABLE && p->queue == 2){
+          pick = p;
+          break;
+        }
+        release(&p->lock);
+      }
+    }
+
+    if(pick){
+      pick->state = RUNNING;
+      pick->ticks_current = 0;
+      c->proc = pick;
+      swtch(&c->context, &pick->context);
+      c->proc = 0;
+
+      if(pick->state == RUNNABLE){
+        if(pick->timeup){
+          pick->timeup = 0;
+          if(pick->queue == 1)
+            pick->queue = 2;
+        } else {
+          if(pick->queue > 1)
+            pick->queue--;
+        }
+      }
+      release(&pick->lock);
+    } else {
       intr_on();
       asm volatile("wfi");
     }
@@ -513,6 +570,7 @@ yield(void)
 {
   struct proc *p = myproc();
   acquire(&p->lock);
+  p->timeup = 0;
   p->state = RUNNABLE;
   sched();
   release(&p->lock);
@@ -562,6 +620,7 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
+  p->timeup = 0;
 
   sched();
 
@@ -585,6 +644,8 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
+        if(p->queue > 1)
+          p->queue--;
       }
       release(&p->lock);
     }
@@ -606,6 +667,8 @@ kill(int pid)
       if(p->state == SLEEPING){
         // Wake process from sleep().
         p->state = RUNNABLE;
+        if(p->queue > 1)
+          p->queue--;
       }
       release(&p->lock);
       return 0;

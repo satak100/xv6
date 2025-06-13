@@ -103,6 +103,8 @@ extern uint64 sys_link(void);
 extern uint64 sys_mkdir(void);
 extern uint64 sys_close(void);
 extern uint64 sys_history(void);
+extern uint64 sys_settickets(void);
+extern uint64 sys_getpinfo(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -126,9 +128,11 @@ static uint64 (*syscalls[])(void) = {
 [SYS_mknod]   sys_mknod,
 [SYS_unlink]  sys_unlink,
 [SYS_link]    sys_link,
-[SYS_mkdir]   sys_mkdir,
-[SYS_close]   sys_close,
-[SYS_history] sys_history,
+  [SYS_mkdir]   sys_mkdir,
+  [SYS_close]   sys_close,
+  [SYS_history] sys_history,
+  [SYS_settickets] sys_settickets,
+  [SYS_getpinfo] sys_getpinfo,
 };
 
 void
