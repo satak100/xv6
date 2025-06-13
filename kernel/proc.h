@@ -113,3 +113,6 @@ struct proc {
   int ticks_current;           // time slices in current turn
   int timeup;                  // set if preempted due to time slice
 };
+
+// Global process table (declared in proc.c)
+extern struct proc proc[NPROC];
