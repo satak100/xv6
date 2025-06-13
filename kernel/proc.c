@@ -16,7 +16,7 @@ struct proc *initproc;
 int nextpid = 1;
 struct spinlock pid_lock;
 
-static uint boost_ticks = 0;
+//static uint boost_ticks = 0;
 
 extern void forkret(void);
 static void freeproc(struct proc *p);
