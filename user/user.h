@@ -1,5 +1,6 @@
 struct stat;
 struct syscall_stat;
+struct pstat;
 
 // system calls
 int fork(void);
