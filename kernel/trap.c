@@ -8,7 +8,8 @@
 
 struct spinlock tickslock;
 uint ticks;
-extern uint boost_ticks;
+//extern uint boost_ticks;
+static uint boost_ticks = 0;
 
 extern char trampoline[], uservec[], userret[];
 
