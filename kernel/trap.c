@@ -89,7 +89,7 @@ usertrap(void)
       p->timeup = 1;
       p->ticks_current = 0;
       p->state = RUNNABLE;
-      //sched();
+      sched();
     }
     release(&p->lock);
   }
@@ -176,7 +176,7 @@ kerneltrap()
       p->timeup = 1;
       p->ticks_current = 0;
       p->state = RUNNABLE;
-      //sched();
+      sched();
     }
     release(&p->lock);
   }
