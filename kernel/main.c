@@ -3,6 +3,7 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "defs.h"
+#include "rand.h"
 
 volatile static int started = 0;
 
@@ -28,6 +29,7 @@ main()
     iinit();         // inode table
     fileinit();      // file table
     syscallinit();
+    randinit();      // initialize PRNG
     virtio_disk_init(); // emulated hard disk
     userinit();      // first user process
     __sync_synchronize();

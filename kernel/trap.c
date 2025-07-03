@@ -8,6 +8,7 @@
 
 struct spinlock tickslock;
 uint ticks;
+extern uint boost_ticks;
 
 extern char trampoline[], uservec[], userret[];
 
@@ -76,9 +77,21 @@ usertrap(void)
   if(killed(p))
     exit(-1);
 
-  // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
-    yield();
+  if(which_dev == 2){
+    acquire(&p->lock);
+    p->ticks_current++;
+    p->ticks_total++;
+    if(p->queue == 1 && p->ticket_current > 0)
+      p->ticket_current--;
+    int limit = (p->queue == 1) ? TIME_LIMIT_1 : TIME_LIMIT_2;
+    if(p->ticks_current >= limit){
+      p->timeup = 1;
+      p->ticks_current = 0;
+      p->state = RUNNABLE;
+      sched();
+    }
+    release(&p->lock);
+  }
 
   usertrapret();
 }
@@ -150,9 +163,22 @@ kerneltrap()
     panic("kerneltrap");
   }
 
-  // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2 && myproc() != 0)
-    yield();
+  if(which_dev == 2 && myproc() != 0){
+    struct proc *p = myproc();
+    acquire(&p->lock);
+    p->ticks_current++;
+    p->ticks_total++;
+    if(p->queue == 1 && p->ticket_current > 0)
+      p->ticket_current--;
+    int limit = (p->queue == 1) ? TIME_LIMIT_1 : TIME_LIMIT_2;
+    if(p->ticks_current >= limit){
+      p->timeup = 1;
+      p->ticks_current = 0;
+      p->state = RUNNABLE;
+      sched();
+    }
+    release(&p->lock);
+  }
 
   // the yield() may have caused some traps to occur,
   // so restore trap registers for use by kernelvec.S's sepc instruction.
@@ -168,6 +194,19 @@ clockintr()
     ticks++;
     wakeup(&ticks);
     release(&tickslock);
+
+    boost_ticks++;
+    if(boost_ticks >= BOOST_INTERVAL){
+      for(struct proc *p = proc; p < &proc[NPROC]; p++){
+        acquire(&p->lock);
+        if(p->state != UNUSED){
+          p->queue = 1;
+          p->ticket_current = p->ticket_original;
+        }
+        release(&p->lock);
+      }
+      boost_ticks = 0;
+    }
   }
 
   // ask for the next timer interrupt. this also clears
